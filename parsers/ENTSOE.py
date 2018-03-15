@@ -142,8 +142,8 @@ def query_ENTSOE(session, params, target_datetime=None, span=(-48, 24)):
     if target_datetime is None :
         target_datetime = arrow.utcnow()
     else:
-        # for a specific datetime, fetch 24h values starting from target datetime
-        span = (-1, 48)
+        # for a specific datetime, fetch 48h values before target datetime
+        span = (-48, 1)
         # make sure we have an arrow object
         target_datetime = arrow.get(target_datetime)
     params['periodStart'] = target_datetime.replace(hours=span[0]).format('YYYYMMDDHH00')

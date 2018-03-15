@@ -131,10 +131,15 @@ def fetch_exchange_by_bidding_zone(bidding_zone1='DK1', bidding_zone2='NO2', tar
     response = r.get(url)
     obj = response.json()
 
-    exchange = list(filter(
-        lambda x: set([x['OutAreaElspotId'], x['InAreaElspotId']]) == set(
-            [bidding_zone_a, bidding_zone_b]),
-        obj))[0]
+    try:
+        exchange = list(filter(
+            lambda x: set([x['OutAreaElspotId'], x['InAreaElspotId']]) == set(
+                [bidding_zone_a, bidding_zone_b]),
+            obj))[0]
+    except IndexError:
+        logger.warning('no data for date {} timestamp {} url {} zone 1 {} zone 2 {}'.format(
+            target_datetime, timestamp, url, bidding_zone1, bidding_zone2))
+        return None
 
     return {
         'sortedZoneKeys': '->'.join(sorted([bidding_zone1, bidding_zone2])),
@@ -144,26 +149,34 @@ def fetch_exchange_by_bidding_zone(bidding_zone1='DK1', bidding_zone2='NO2', tar
     }
 
 
-def _fetch_exchanges_from_sorted_bidding_zones(sorted_bidding_zones, target_datetime=None, session=None):
+def _fetch_exchanges_from_sorted_bidding_zones(sorted_bidding_zones, target_datetime=None,
+                                               session=None, logger=None):
     zones = sorted_bidding_zones.split('->')
-    return fetch_exchange_by_bidding_zone(zones[0], zones[1], target_datetime, session)
+    return fetch_exchange_by_bidding_zone(zones[0], zones[1], target_datetime, session,
+                                          logger=logger)
 
 
 def _sum_of_exchanges(exchanges):
     exchange_list = list(exchanges)
+    if exchange_list == [None]:
+        return None
     return {
-        'netFlow': sum(e['netFlow'] for e in exchange_list),
+        'netFlow': sum(e['netFlow'] for e in exchange_list if e is not None),
         'datetime': exchange_list[0]['datetime'],
         'source': exchange_list[0]['source']
     }
 
 
-def fetch_exchange(zone_key1='DK', zone_key2='NO', session=None, target_datetime=None, logger=logging.getLogger(__name__)):
+def fetch_exchange(zone_key1='DK', zone_key2='NO', session=None, target_datetime=None,
+                   logger=logging.getLogger(__name__)):
     r = session or requests.session()
 
     sorted_exchange = '->'.join(sorted([zone_key1, zone_key2]))
-    data = _sum_of_exchanges(map(lambda e: _fetch_exchanges_from_sorted_bidding_zones(e, target_datetime, r),
+    data = _sum_of_exchanges(map(lambda e: _fetch_exchanges_from_sorted_bidding_zones(
+        e, target_datetime, r, logger=logger),
                                  exchanges_mapping[sorted_exchange]))
+    if not data:
+        return None
     data['sortedZoneKeys'] = '->'.join(sorted([zone_key1, zone_key2]))
 
     return data
